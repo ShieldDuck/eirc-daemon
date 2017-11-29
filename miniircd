@@ -64,6 +64,7 @@ class Channel(object):
         self.members = set()
         self._topic = ""
         self._key = None
+        self._modes = ""
         if self.server.state_dir:
             self._state_path = "%s/%s" % (
                 self.server.state_dir,
@@ -92,6 +93,18 @@ class Channel(object):
         self._write_state()
 
     key = property(get_key, set_key)
+
+    def get_modes(self):
+        return self._modes
+
+    def add_modes(self, modes):
+        for mode in modes:
+            if not mode in self._modes:
+                self._modes += mode
+
+    def remove_modes(self, modes):
+        for mode in modes:
+            self._modes = self._modes.replace(mode, "")
 
     def remove_client(self, client):
         self.members.discard(client)
@@ -348,12 +361,10 @@ class Client(object):
             if server.has_channel(targetname):
                 channel = server.get_channel(targetname)
                 if len(arguments) < 2:
-                    if channel.key:
-                        modes = "+k"
-                        if irc_lower(channel.name) in self.channels:
-                            modes += " %s" % channel.key
-                    else:
-                        modes = "+"
+                    modes = "+%s" % channel.get_modes()
+                    if channel.key and irc_lower(channel.name) in self.channels:
+                        modes += " %s" % channel.key
+                    print(modes)
                     self.reply("324 %s %s %s"
                                % (self.nickname, targetname, modes))
                     return
@@ -365,6 +376,7 @@ class Client(object):
                     key = arguments[2]
                     if irc_lower(channel.name) in self.channels:
                         channel.key = key
+                        channel.add_modes("k")
                         self.message_channel(
                             channel, "MODE", "%s +k %s" % (channel.name, key),
                             True)
@@ -376,6 +388,7 @@ class Client(object):
                 elif flag == "-k":
                     if irc_lower(channel.name) in self.channels:
                         channel.key = None
+                        channel.remove_modes("k")
                         self.message_channel(
                             channel, "MODE", "%s -k" % channel.name,
                             True)
@@ -384,6 +397,12 @@ class Client(object):
                     else:
                         self.reply("442 %s :You're not on that channel"
                                    % targetname)
+                elif flag == "+A":
+                    channel.add_modes("A")
+                    self.message_channel(channel, "MODE", "%s +A" % channel.name, True)
+                elif flag == "-A":
+                    channel.remove_modes("A")
+                    self.message_channel(channel, "MODE", "%s -A" % channel.name, True)
                 else:
                     self.reply("472 %s %s :Unknown MODE flag"
                                % (self.nickname, flag))
